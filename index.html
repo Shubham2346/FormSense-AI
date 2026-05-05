@@ -1,19 +1,204 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <title>BodyPose Demo</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FormSense AI — Smart Workout Form Coach</title>
+  <meta name="description" content="AI-powered real-time workout form coach. Uses webcam body tracking to detect exercises, count reps, and provide live form feedback.">
 
-  <!-- p5 -->
+  <!-- Google Font -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+
+  <!-- Styles -->
+  <link rel="stylesheet" href="style.css">
+
+  <!-- ml5.js v1 + p5.js -->
+  <script src="https://unpkg.com/ml5@1/dist/ml5.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/p5@1.4.0/lib/p5.js"></script>
 
-  <!-- FIXED ml5 version -->
-  <script src="https://unpkg.com/ml5@0.12.2/dist/ml5.min.js"></script>
-
-  <!-- your sketch -->
+  <!-- App modules (order matters: engine → ui → sketch) -->
+  <script src="poseEngine.js"></script>
+  <script src="ui.js"></script>
   <script src="sketch.js"></script>
 </head>
-
 <body>
-  <h1>BodyPose Demo</h1>
+
+<div id="app-container">
+
+  <!-- ── Top Bar ── -->
+  <header id="top-bar">
+    <div class="app-title">
+      <span class="logo-icon">🏋️</span>
+      <span class="brand-text">FormSense AI</span>
+    </div>
+    <div class="model-status">
+      <span class="status-dot" id="status-dot"></span>
+      <span id="status-text">Loading Model…</span>
+    </div>
+  </header>
+
+  <!-- ── Main Content ── -->
+  <main id="main-content">
+
+    <!-- Canvas Area -->
+    <div id="canvas-wrapper">
+      <div id="loading-overlay">
+        <div class="loading-spinner"></div>
+        <div class="loading-text">Initializing MoveNet model…</div>
+      </div>
+      <span id="canvas-exercise-label">🏋️ Squat</span>
+      <span id="canvas-rep-display">× 0</span>
+    </div>
+
+    <!-- Sidebar -->
+    <aside id="sidebar">
+
+      <!-- Exercise Selector -->
+      <div class="glass-card">
+        <div class="card-header">
+          <span class="card-icon">📋</span> Exercise
+        </div>
+        <div id="exercise-selector">
+          <button class="exercise-btn active" data-exercise="squat">
+            <span class="btn-icon">🏋️</span> Squat
+          </button>
+          <button class="exercise-btn" data-exercise="pushup">
+            <span class="btn-icon">💪</span> Push-Up
+          </button>
+          <button class="exercise-btn" data-exercise="lunge">
+            <span class="btn-icon">🦵</span> Lunge
+          </button>
+          <button class="exercise-btn" data-exercise="plank">
+            <span class="btn-icon">🧘</span> Plank
+          </button>
+          <button class="exercise-btn" data-exercise="yoga">
+            <span class="btn-icon">🙏</span> Yoga
+          </button>
+          <button class="exercise-btn" data-exercise="auto">
+            <span class="btn-icon">🤖</span> Auto
+          </button>
+        </div>
+      </div>
+
+      <!-- Rep Counter -->
+      <div class="glass-card" id="rep-counter-wrap">
+        <div class="card-header">
+          <span class="card-icon">🔢</span> Reps
+        </div>
+        <div class="rep-counter-value" id="rep-count">0</div>
+        <div class="rep-label">Current Set</div>
+      </div>
+
+      <!-- Hold Timer (plank/yoga) -->
+      <div class="glass-card hold-timer-container" id="hold-timer-wrap">
+        <div class="card-header">
+          <span class="card-icon">⏱️</span> Hold Time
+        </div>
+        <div class="hold-timer-value" id="hold-time">00:00</div>
+        <div class="hold-timer-label">Keep holding!</div>
+      </div>
+
+      <!-- Form Score Gauge -->
+      <div class="glass-card">
+        <div class="card-header">
+          <span class="card-icon">📊</span> Form Score
+        </div>
+        <div class="gauge-container">
+          <svg class="gauge-svg" viewBox="0 0 120 120">
+            <circle class="gauge-bg" cx="60" cy="60" r="46"></circle>
+            <circle class="gauge-fill" cx="60" cy="60" r="46"
+              id="gauge-fill"
+              stroke="#00f0ff"
+              stroke-dasharray="289.03"
+              stroke-dashoffset="289.03"
+              transform="rotate(-90 60 60)">
+            </circle>
+            <text class="gauge-text" x="60" y="55" id="gauge-value">0%</text>
+            <text class="gauge-label" x="60" y="75">Form</text>
+          </svg>
+        </div>
+      </div>
+
+      <!-- Angle Readouts -->
+      <div class="glass-card">
+        <div class="card-header">
+          <span class="card-icon">📐</span> Key Angles
+        </div>
+        <div id="angle-bars">
+          <div class="angle-item">
+            <span class="angle-name">L Knee</span>
+            <div class="angle-bar-track"><div class="angle-bar-fill" style="width:0%"></div></div>
+            <span class="angle-value">—</span>
+          </div>
+          <div class="angle-item">
+            <span class="angle-name">R Knee</span>
+            <div class="angle-bar-track"><div class="angle-bar-fill" style="width:0%"></div></div>
+            <span class="angle-value">—</span>
+          </div>
+          <div class="angle-item">
+            <span class="angle-name">L Hip</span>
+            <div class="angle-bar-track"><div class="angle-bar-fill" style="width:0%"></div></div>
+            <span class="angle-value">—</span>
+          </div>
+          <div class="angle-item">
+            <span class="angle-name">R Hip</span>
+            <div class="angle-bar-track"><div class="angle-bar-fill" style="width:0%"></div></div>
+            <span class="angle-value">—</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Form Feedback -->
+      <div class="glass-card">
+        <div class="card-header">
+          <span class="card-icon">💡</span> Form Tips
+        </div>
+        <div class="feedback-list" id="feedback-list">
+          <div class="feedback-item warning">
+            <span class="fb-icon">👤</span>
+            <span>Waiting for webcam…</span>
+          </div>
+        </div>
+      </div>
+
+    </aside>
+  </main>
+
+  <!-- ── Bottom Bar ── -->
+  <footer id="bottom-bar">
+    <div class="stat-item">
+      <span class="stat-icon">⏱</span>
+      <div class="stat-content">
+        <span class="stat-value" id="session-time">00:00</span>
+        <span class="stat-label">Session</span>
+      </div>
+    </div>
+    <div class="stat-item">
+      <span class="stat-icon">🔄</span>
+      <div class="stat-content">
+        <span class="stat-value" id="total-reps">0</span>
+        <span class="stat-label">Total Reps</span>
+      </div>
+    </div>
+    <div class="stat-item">
+      <span class="stat-icon">📈</span>
+      <div class="stat-content">
+        <span class="stat-value" id="avg-score">0%</span>
+        <span class="stat-label">Avg Score</span>
+      </div>
+    </div>
+    <div class="stat-item">
+      <span class="stat-icon">🔥</span>
+      <div class="stat-content">
+        <span class="stat-value" id="streak-count">0</span>
+        <span class="stat-label">Streak</span>
+      </div>
+    </div>
+  </footer>
+
+</div>
+
 </body>
 </html>
